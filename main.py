@@ -39,6 +39,7 @@ def main():
             print()
             print("AI:")
             print(f"Answer: {output_data.get('answer')}")
+            print(f"Route: {output_data.get('route')}")
             print(f"Topic: {output_data.get('topic')}")
             print(f"Difficulty: {output_data.get('difficulty')}")
             print(f"Used calculator: {output_data.get('used_calculator')}")

@@ -181,5 +181,10 @@ def web_search(question: str) -> str:
 
     response = httpx.post(url, headers=headers, json=payload, timeout=60)
     response.raise_for_status()
+    data = response.json()
 
-    return response.json()["choices"][0]["message"]["content"]
+    # Guard against error payloads that do not contain choices.
+    if not isinstance(data, dict) or not data.get("choices"):
+        return f"Error: Unexpected response from the model: {data}"
+
+    return data["choices"][0]["message"]["content"]
