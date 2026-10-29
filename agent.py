@@ -34,6 +34,7 @@ QUESTION UNDERSTANDING RULES:
 
 Choose exactly one route:
 - "physics": Physics questions.
+- "biology": Biology questions.
 - "general": General knowledge, programming, history, geography,
   and study topics.
 - "calculator": Pure arithmetic calculations.
@@ -67,7 +68,27 @@ Reply ONLY with a raw JSON object containing these keys:
 }
 """
 
+BIOLOGY_INSTRUCTIONS = """
+You are a helpful AI Study Assistant specialized in biology.
 
+Before answering, check whether the user's question contains
+an unfamiliar word or phrase that could affect its meaning.
+
+Rules:
+- Read the entire question carefully.
+- Never silently ignore an unfamiliar or unusual phrase.
+- Do not assume unfamiliar words are typos.
+- If the intended meaning is obvious despite a minor typo,
+  answer normally.
+- If an unfamiliar phrase could change the meaning, ask
+  a brief clarification question.
+- If the question is ambiguous, do not present a guessed
+  interpretation as certain.
+- Answer biology questions correctly and briefly.
+- Use simple language.
+- Show the key formula when necessary.
+- Keep answers short, clear, and professional.
+""" + SHORT_ANSWER_RULES + JSON_OUTPUT_INSTRUCTIONS
 
 PHYSICS_INSTRUCTIONS = """
 You are a helpful AI Study Assistant specialized in physics.
@@ -185,6 +206,7 @@ TOOLS_BY_ROUTE = {
 VALID_ROUTES = {
     "physics",
     "general",
+    "biology",
     "calculator",
     "weather",
     "web_search",
@@ -441,6 +463,14 @@ def answer_task(user_question: str, route: str, history: list) -> dict:
         output_data = ask_specialist(
             get_model("PHYSICS_MODEL"),
             PHYSICS_INSTRUCTIONS,
+            user_question,
+            history,
+        )
+
+    elif route == "biology":
+        output_data = ask_specialist(
+            get_model("BIOLOGY_MODEL"),
+            BIOLOGY_INSTRUCTIONS,
             user_question,
             history,
         )
