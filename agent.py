@@ -1,6 +1,3 @@
-
-# agent.py
-
 import json
 import os
 import httpx
@@ -31,6 +28,10 @@ QUESTION UNDERSTANDING RULES:
 - If an unclear phrase could change the meaning, keep the
   original wording so the specialist can ask for clarification.
 - Do not invent missing information.
+- If one task needs information from another task, put the task
+  that retrieves the information first.
+- For example, if the user asks for weather and then asks a
+  question based on the weather, retrieve the weather first.
 
 Choose exactly one route:
 - "physics": Physics questions.
@@ -76,6 +77,7 @@ an unfamiliar word or phrase that could affect its meaning.
 
 Rules:
 - Read the entire question carefully.
+- make sure to answer every part of the question related to biology.
 - Never silently ignore an unfamiliar or unusual phrase.
 - Do not assume unfamiliar words are typos.
 - If the intended meaning is obvious despite a minor typo,
@@ -98,25 +100,28 @@ an unfamiliar word or phrase that could affect its meaning.
 
 Rules:
 - Read the entire question carefully.
+- make sure to answer every part of the question related to physics.
 - Never silently ignore an unfamiliar or unusual phrase.
 - Do not assume unfamiliar words are typos.
 - If the intended meaning is obvious despite a minor typo,
   answer normally.
 - If an unfamiliar phrase could change the meaning, ask
   a brief clarification question.
-- If the question is ambiguous, do not present a guessed
-  interpretation as certain.
+- If a question depends on an earlier task, use the
+  information provided in its completed-task context.
+- Do not ask for information that is already available in
+  that context.
 - Answer physics questions correctly and briefly.
 - Use simple language.
 - Show the key formula when necessary.
+- Distinguish between related physical quantities.
 - Keep answers short, clear, and professional.
 
 """ + SHORT_ANSWER_RULES + JSON_OUTPUT_INSTRUCTIONS
 
-
-
 GENERAL_INSTRUCTIONS = """
 You are a helpful AI Study Assistant.
+make sure to answer every part of the question.
 Answer general knowledge, programming, history, geography,
 and study questions correctly and briefly.
 If you are unsure, say so.
@@ -126,8 +131,12 @@ TOOL_INSTRUCTIONS = """
 You are a helpful assistant with access to one tool.
 Use the tool to obtain the information or result you need.
 Explain the result in one short, clear sentence.
+make sure to answer every part of the question.
 Do not invent tool results.
 If a tool returns an error, explain the problem.
+If earlier completed-task context contains information needed
+for the current question, use that information.
+Do not ask the user to repeat information already provided.
 """ + SHORT_ANSWER_RULES + JSON_OUTPUT_INSTRUCTIONS
 
 
@@ -297,7 +306,11 @@ def parse_json_response(text: str, default_answer: str = "") -> dict:
         data = {}
 
     if not data.get("answer"):
-        data["answer"] = default_answer or text or "Sorry, I could not generate an answer."
+        data["answer"] = (
+            default_answer
+            or text
+            or "Sorry, I could not generate an answer."
+        )
 
     data.setdefault("topic", "General")
     data.setdefault("difficulty", "Beginner")
@@ -310,7 +323,7 @@ def parse_json_response(text: str, default_answer: str = "") -> dict:
 
 # ---------------------------------------------------------------------------
 # Task planning
-# ---------------------------------------------------------------------------   
+# ---------------------------------------------------------------------------
 
 def parse_tasks(text: str, user_question: str) -> list:
     """Read the Orchestrator's tasks from its JSON response."""
@@ -456,8 +469,12 @@ def run_tool_loop(
 # Answer individual tasks
 # ---------------------------------------------------------------------------
 
-def answer_task(user_question: str, route: str, history: list) -> dict:
-    """Send a task to the correct specialist or tool."""
+def answer_task(
+    user_question: str,
+    route: str,
+    history: list,
+) -> dict:
+    """Answer a task using the available conversation history."""
 
     if route == "physics":
         output_data = ask_specialist(
@@ -595,16 +612,35 @@ def run_agent(user_question: str, message_history: list) -> tuple:
     tasks = plan_tasks(user_question, message_history)
     task_results = []
 
+    # Create temporary history for sharing completed task answers.
+    task_history = message_history.copy()
+
     for task in tasks:
+
         result = answer_task(
             task["question"],
             task["route"],
-            message_history,
+            task_history,
         )
+
         task_results.append((task, result))
 
+        # Save the completed task in temporary history.
+        task_history.append({
+            "role": "user",
+            "content": task["question"],
+        })
+
+        task_history.append({
+            "role": "assistant",
+            "content": result.get("answer", ""),
+        })
+
+    # Combine all task answers.
     output_data = combine_results(task_results)
 
+    # Save only the original user request and final answer
+    # in permanent conversation history.
     message_history.append({
         "role": "user",
         "content": user_question,
